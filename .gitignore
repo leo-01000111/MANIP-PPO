@@ -1,0 +1,11 @@
+reference/
+__pycache__/
+*.pyc
+.venv/
+runs/
+*.aux
+*.log
+*.out
+cherubini.md
+NOTES.md
+CLAUDE.md

@@ -1,0 +1,63 @@
+% MANIP report, Part II (personal project, 5 pages): a kinematics-agnostic PPO reaching agent on the KR16.
+% Same preamble as manip_report.tex, so the body can be pasted between the Part II header and the bibliography.
+% Build: pdflatex part2.tex (twice)
+\documentclass[10pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=2cm,top=1.6cm,bottom=1.6cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage[font=small]{caption}
+\usepackage{subcaption}
+\usepackage{lmodern}
+\usepackage{helvet}
+\usepackage[hidelinks]{hyperref}
+\renewcommand{\familydefault}{\sfdefault}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\raggedright
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
+\pagestyle{plain}
+
+% a centred equation on its own line
+\newenvironment{eq}{\vspace{-5pt}\begin{center}$\displaystyle}{$\end{center}\vspace{-6pt}}
+\newcommand{\head}[1]{\vspace{4pt}{\large\bfseries #1}\par}
+\newcommand{\sub}[1]{\vspace{1pt}{\bfseries #1}\par}
+\newcommand{\todo}[1]{{\color{red}[TODO: #1]}}
+
+\begin{document}
+
+% =====================================================================
+{\Large\bfseries Part II --- A kinematics-agnostic PPO reaching agent}
+% =====================================================================
+
+\head{1. Goal}
+\todo{Question: can a policy that never sees the kinematic model learn to reach target poses on the KR16? Agent outputs joint velocities, closed loop. Retrained per robot.}
+
+\head{2. Working principle of PPO}
+\todo{About 1 page: policy and value networks (actor-critic), advantage and GAE, clipped objective. Link to the BEng thesis.}
+
+\head{3. Environment}
+\todo{Hidden world = validated KR16 direct model. Observation (with and without q), action q-dot, reward, episode, success tolerance.}
+
+\head{4. Training}
+\todo{SB3 PPO, hyperparameters, seeds, learning curves.}
+
+\head{5. Results}
+\todo{PPO vs Jacobian control (Ex 6): success rate, final error, steps to reach. Input with vs without q.}
+
+\head{6. Robustness to a changed link length}
+\todo{a3 changed; Jacobian control with the old model vs retrained PPO.}
+
+\head{7. Conclusion}
+\todo{Also: replay of the policy in the lab's RViz simulator.}
+
+\begin{thebibliography}{9}
+\bibitem{ppo} J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford and O.~Klimov, ``Proximal policy optimization algorithms,'' arXiv:1707.06347, 2017.
+\end{thebibliography}
+
+\end{document}
