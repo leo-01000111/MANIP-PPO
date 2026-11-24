@@ -19,7 +19,10 @@ PANELS = [("eval", "success_rate", "success rate (eval)", False),
           ("prog", "train/approx_kl", "approx. KL", False),
           ("prog", "train/clip_fraction", "clip fraction", False),
           ("prog", "train/std", "action std", False),
-          ("eval", "median_pos_err", "median final pos. error (m)", True)]
+          ("eval", "median_pos_err", "median final pos. error (m)", True),
+          ("eval", "mean_rot_err", "mean final orientation error (deg)", False)]
+STYLES = ["-", "--", ":", "-."]          # one line style per run, so lines on top of each other stay visible
+SCALE = {"mean_rot_err": 57.29577951308232}   # rad -> deg
 
 
 def read(run):
@@ -59,7 +62,7 @@ def main():
     a = ap.parse_args()
 
     plt.ion()
-    fig, axes = plt.subplots(2, 4, figsize=(15, 7.5))
+    fig, axes = plt.subplots(3, 3, figsize=(14, 9.5))
     while plt.fignum_exists(fig.number):
         lines = []
         for ax in axes.flat:
@@ -73,13 +76,14 @@ def main():
                     continue
                 x = df["timesteps"] if src == "eval" else df["time/total_timesteps"]
                 y = df[col] if src == "eval" else df[col].rolling(a.smooth, min_periods=1).mean()
-                ax.plot(x / 1e6, y, color=f"C{i}", label=run, lw=1.2)
+                y = y * SCALE.get(col, 1.0)
+                ax.plot(x / 1e6, y, color=f"C{i}", label=run, lw=1.6 - 0.2 * i, ls=STYLES[i % len(STYLES)])
                 ax.set_title(title, fontsize=9)
                 ax.set_yscale("log" if logy else "linear")
                 ax.grid(alpha=0.3)
                 ax.tick_params(labelsize=8)
         axes.flat[0].legend(fontsize=7)
-        for ax in axes[1]:
+        for ax in axes[-1]:
             ax.set_xlabel("timesteps (M)", fontsize=8)
         fig.suptitle("\n".join(lines) + f"\nupdated {dt.datetime.now():%H:%M:%S}", fontsize=9, family="monospace")
         fig.tight_layout(rect=(0, 0, 1, 0.88))
