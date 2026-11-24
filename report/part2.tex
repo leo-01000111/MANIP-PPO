@@ -250,6 +250,7 @@ The value loss of the agent without $q$ stays higher: without the joint angles, 
 \item Why the Jacobian fails 30\,\%: about 140 of 160 failures end at a joint limit. A local Cartesian law cannot change configuration. Longer episodes do not help (63\,\% at 5\,s, 68\,\% at 50\,s). With targets near the start configuration it reaches 99.7\,\%.
 \item Failure sets differ: 8.7\,\% of targets are solved by PPO only. PPO is better when $q_1$ must turn by more than 3 rad (Jacobian about 31\,\%).
 \item PPO failures: far misses (median 30 cm), often also at a joint limit.
+\item Why ``without $q$'' matters: control from external sensing only (hydraulic machines such as excavators, soft or cable-driven robots, failed or uncalibrated encoders, eye-to-hand vision). Example: an excavator operator sets joint velocities with levers and watches the bucket, never the joint angles. Limitation: here the tool pose is exact, with no camera noise or delay.
 \item Without $q$: one tool pose can come from up to 8 configurations, so the pose alone is ambiguous. A short motion history (last 4 steps) lets the agent probe its configuration: result of X1.
 \item Pose (6D) stage: same network, orientation weight raised: did not learn (0.8\,\%). State as a limitation.
 \item Figure: a few 3D tool paths, PPO vs Jacobian.
