@@ -63,6 +63,8 @@ def main():
     ap.add_argument("--episodes", type=int, default=500)
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--tag", default=None)
+    ap.add_argument("--max-steps", type=int, default=100, help="episode length for the baseline (PPO models use their config)")
+    ap.add_argument("--target-rot-range", type=float, default=None, help="baseline: restricted target orientation (deg)")
     args = ap.parse_args()
 
     results, trajs = {}, {}
@@ -81,7 +83,8 @@ def main():
         trajs.update(t)
     if args.baseline:
         ctrl = JacobianController(KR16(args.model_a3), args.task, args.lam)
-        make_env = lambda: KR16ReachEnv(task=args.task, a3=args.a3)
+        rr = None if args.target_rot_range is None else np.deg2rad(args.target_rot_range)
+        make_env = lambda: KR16ReachEnv(task=args.task, a3=args.a3, max_steps=args.max_steps, target_rot_range=rr)
         results["jacobian"], t = evaluate_method("jacobian", make_env, lambda obs, env: ctrl.act(env.q, env.M_star),
                                                  args.episodes, args.seed)
         trajs.update(t)
