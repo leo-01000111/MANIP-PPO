@@ -62,6 +62,7 @@ def main():
 
     plt.ion()
     fig, axes = plt.subplots(3, 3, figsize=(14, 9.5))
+    plt.show(block=False)                       # show once; later refreshes do not bring it to the front
     while plt.fignum_exists(fig.number):
         lines = []
         for ax in axes.flat:
@@ -86,7 +87,8 @@ def main():
             ax.set_xlabel("timesteps (M)", fontsize=8)
         fig.suptitle("\n".join(lines) + f"\nupdated {dt.datetime.now():%H:%M:%S}", fontsize=9, family="monospace")
         fig.tight_layout(rect=(0, 0, 1, 0.88))
-        plt.pause(a.every)
+        fig.canvas.draw_idle()                  # redraw without raising the window (plt.pause steals the focus)
+        fig.canvas.start_event_loop(a.every)
 
 
 if __name__ == "__main__":
