@@ -134,7 +134,16 @@ def main():
     ap.add_argument("--norm-reward", action=argparse.BooleanOptionalAction, default=True, help="VecNormalize on rewards only (obs untouched)")
     ap.add_argument("--threads", type=int, default=0, help="torch threads (0 = torch default)")
     ap.add_argument("--vec", choices=["dummy", "subproc"], default="subproc")
+    ap.add_argument("--n-steps", type=int, default=HYPERPARAMS["n_steps"], help="rollout length per env")
+    ap.add_argument("--batch-size", type=int, default=HYPERPARAMS["batch_size"])
+    ap.add_argument("--n-epochs", type=int, default=HYPERPARAMS["n_epochs"])
+    ap.add_argument("--lr", type=float, default=HYPERPARAMS["learning_rate"])
+    ap.add_argument("--lr-decay", action="store_true", help="learning rate decays linearly to 0")
+    ap.add_argument("--target-kl", type=float, default=None, help="stop the epochs of an update when KL > 1.5 * target")
+    ap.add_argument("--ent-coef", type=float, default=HYPERPARAMS["ent_coef"])
     args = ap.parse_args()
+    HYPERPARAMS.update(n_steps=args.n_steps, batch_size=args.batch_size, n_epochs=args.n_epochs,
+                       learning_rate=args.lr, ent_coef=args.ent_coef)
 
     out_dir = os.path.join("runs", args.name)
     os.makedirs(out_dir, exist_ok=True)
@@ -162,7 +171,8 @@ def main():
         model = PPO.load(args.init_from, env=venv, device="cpu", custom_objects={"seed": args.seed})
     else:
         model = PPO("MlpPolicy", venv, policy_kwargs=dict(POLICY_KWARGS, log_std_init=args.log_std_init), seed=args.seed, device="cpu",
-                    verbose=0, use_sde=args.sde, sde_sample_freq=args.sde_freq, **HYPERPARAMS)
+                    verbose=0, use_sde=args.sde, sde_sample_freq=args.sde_freq, target_kl=args.target_kl,
+                    **dict(HYPERPARAMS, learning_rate=(lambda f: f * args.lr) if args.lr_decay else args.lr))
     model.set_logger(configure(out_dir, ["stdout", "csv"]))
 
     t0 = time.time()
