@@ -5,7 +5,7 @@ The weights come from export_numpy.py. `build_obs` is the same function the envi
 """
 import numpy as np
 
-from obs import OBS_DIM, build_obs, orientation_error  # noqa: F401  (re-exported)
+from obs import HIST_ENTRY, OBS_DIM, build_obs, history_entry, obs_dim, orientation_error  # noqa: F401  (re-exported)
 
 
 class NumpyPolicy:
@@ -19,6 +19,7 @@ class NumpyPolicy:
         # observation settings of the training run (use them when calling build_obs)
         self.obs_q = bool(d["obs_q"]) if "obs_q" in d else True
         self.multiscale_obs = bool(d["multiscale_obs"]) if "multiscale_obs" in d else False
+        self.history = int(d["history"]) if "history" in d else 0     # past steps appended to the observation
 
     def build_obs(self, q, M, M_star, prev_action):
         """Observation with the settings this policy was trained with."""

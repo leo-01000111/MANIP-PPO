@@ -39,9 +39,16 @@ class PPOController:
         from kr16 import VMAX, QMIN, QMAX
         from policy_numpy import NumpyPolicy
         self.pol = NumpyPolicy(npz_path)
+        self.vmax, self.qmin, self.qmax = VMAX, QMIN, QMAX
+        self.set_target(M_star)
+
+    def set_target(self, M_star):
+        """New target (4x4): also clears the previous action and the history, like an env reset."""
+        from obs import HIST_ENTRY
         self.M_star = np.asarray(M_star, float)
         self.prev_a = np.zeros(6, dtype=np.float32)
-        self.vmax, self.qmin, self.qmax = VMAX, QMIN, QMAX
+        self.M_prev = None                    # tool pose at the previous control step
+        self.hist_buf = np.zeros((self.pol.history, HIST_ENTRY), dtype=np.float32)   # newest first
 
     def errors(self, M):
         from obs import orientation_error
@@ -51,7 +58,15 @@ class PPOController:
 
     def step(self, q, M):
         """q: measured joints (6,), M: measured tool pose (4x4). Returns qdot (6,) in rad/s."""
+        if self.pol.history:
+            from obs import history_entry
+            if self.M_prev is not None:       # motion since the last tick, caused by the action sent then
+                self.hist_buf = np.roll(self.hist_buf, 1, axis=0)
+                self.hist_buf[0] = history_entry(self.M_prev, M, self.prev_a)
+            self.M_prev = np.array(M, float)
         o = self.pol.build_obs(np.asarray(q, float), M, self.M_star, self.prev_a)
+        if self.pol.history:
+            o = np.concatenate([o, self.hist_buf.reshape(-1)])
         a = self.pol.act(o)
         self.prev_a = a
         return a.astype(float) * SPEED_SCALE * self.vmax

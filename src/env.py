@@ -4,7 +4,7 @@ import numpy as np
 from gymnasium import spaces
 
 from kr16 import KR16
-from obs import OBS_DIM, build_obs, orientation_error
+from obs import HIST_ENTRY, build_obs, history_entry, obs_dim, orientation_error
 
 EPS_P = 0.001            # m, floor of the position error in the log reward
 EPS_R = np.deg2rad(0.1)  # rad, floor of the orientation error in the log reward
@@ -14,7 +14,7 @@ class KR16ReachEnv(gym.Env):
     """The agent commands joint velocities and sees only measurements (see obs.py for the layout).
 
     Action  : a in [-1, 1]^6, qdot = a * speed_scale * VMAX, q_next = clip(q + qdot * dt, qmin, qmax).
-    Observation (OBS_DIM = 62, same size for every task and for obs_q True/False):
+    Observation (62 values, plus 12 per step of `history` if > 0 (tool motion and action of the last steps, newest first); same size for every task and for obs_q True/False):
         q in [-1, 1] (zeros if obs_q is False), tool p and R columns, target p* and R* columns,
         position error, orientation error theta*u of R* * R^T, previous action, then a multi-scale block
         (26 values, zeros if multiscale_obs is False).
@@ -30,9 +30,11 @@ class KR16ReachEnv(gym.Env):
     metadata = {"render_modes": []}
 
     def __init__(self, obs_q=True, task="position", w_rot=0.0, a3=0.68, dt=0.05, max_steps=100,
-                 speed_scale=0.5, pos_tol=0.01, rot_tol=np.deg2rad(5), reward_mode="distance", multiscale_obs=False):
+                 speed_scale=0.5, pos_tol=0.01, rot_tol=np.deg2rad(5), reward_mode="distance", multiscale_obs=False,
+                 history=0):
         assert task in ("position", "pose") and reward_mode in ("distance", "progress", "log_progress")
         self.multiscale_obs = multiscale_obs
+        self.history = int(history)
         self.reward_mode = reward_mode
         self.obs_q, self.task, self.w_rot = obs_q, task, w_rot
         self.dt, self.max_steps, self.speed_scale = dt, max_steps, speed_scale
@@ -41,8 +43,9 @@ class KR16ReachEnv(gym.Env):
         mid = (self.world.qmax + self.world.qmin) / 2
         half = 0.9 * (self.world.qmax - self.world.qmin) / 2
         self._sample_lo, self._sample_hi = mid - half, mid + half
-        self.obs_dim = OBS_DIM
-        self.observation_space = spaces.Box(-5.0, 5.0, shape=(OBS_DIM,), dtype=np.float32)
+        self.obs_dim = obs_dim(self.history)
+        self.hist_buf = np.zeros((self.history, HIST_ENTRY), dtype=np.float32)
+        self.observation_space = spaces.Box(-5.0, 5.0, shape=(self.obs_dim,), dtype=np.float32)
         self.action_space = spaces.Box(-1.0, 1.0, shape=(6,), dtype=np.float32)
 
     def set_w_rot(self, w_rot):
@@ -63,7 +66,10 @@ class KR16ReachEnv(gym.Env):
         return pos_err, rot_err
 
     def _obs(self):
-        return build_obs(self.q, self.M, self.M_star, self.prev_action, self.obs_q, self.multiscale_obs)
+        obs = build_obs(self.q, self.M, self.M_star, self.prev_action, self.obs_q, self.multiscale_obs)
+        if self.history:
+            obs = np.concatenate([obs, self.hist_buf.reshape(-1)])
+        return obs
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -71,6 +77,7 @@ class KR16ReachEnv(gym.Env):
         self.M = self.world.fMe(self.q)
         self.M_star = self.world.fMe(self._sample_q())
         self.prev_action = np.zeros(6, dtype=np.float32)
+        self.hist_buf = np.zeros((self.history, HIST_ENTRY), dtype=np.float32)
         self.steps = 0
         pos_err, rot_err = self._errors()
         self._prev_err = (pos_err, rot_err)
@@ -80,7 +87,10 @@ class KR16ReachEnv(gym.Env):
         a = np.clip(np.asarray(action, dtype=np.float64), -1.0, 1.0)
         qdot = a * self.speed_scale * self.world.vmax
         self.q = np.clip(self.q + qdot * self.dt, self.world.qmin, self.world.qmax)
-        self.M = self.world.fMe(self.q)
+        M_prev, self.M = self.M, self.world.fMe(self.q)
+        if self.history:      # newest entry first
+            self.hist_buf = np.roll(self.hist_buf, 1, axis=0)
+            self.hist_buf[0] = history_entry(M_prev, self.M, a)
         self.prev_action = a.astype(np.float32)
         self.steps += 1
 

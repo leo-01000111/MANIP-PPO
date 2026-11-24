@@ -125,6 +125,7 @@ def main():
     ap.add_argument("--eval-freq", type=int, default=50_000)
     ap.add_argument("--reward", choices=["distance", "progress", "log_progress"], default="log_progress")
     ap.add_argument("--multiscale-obs", action=argparse.BooleanOptionalAction, default=True, help="fill the multi-scale error block of the observation")
+    ap.add_argument("--history", type=int, default=0, help="number of past steps (tool motion + action, 12 values each) appended to the observation")
     ap.add_argument("--sde", action=argparse.BooleanOptionalAction, default=True, help="gSDE exploration (use_sde=True)")
     ap.add_argument("--sde-freq", type=int, default=-1, help="sde_sample_freq")
     ap.add_argument("--pos-tol", type=float, default=0.01, help="final position tolerance (m)")
@@ -148,7 +149,7 @@ def main():
     out_dir = os.path.join("runs", args.name)
     os.makedirs(out_dir, exist_ok=True)
     env_kwargs = dict(obs_q=args.obs_q, task=args.task, w_rot=args.w_rot, a3=args.a3, reward_mode=args.reward,
-                      multiscale_obs=args.multiscale_obs, pos_tol=args.pos_tol)
+                      multiscale_obs=args.multiscale_obs, pos_tol=args.pos_tol, history=args.history)
     if args.threads:
         torch.set_num_threads(args.threads)
     config = dict(vars(args), env_kwargs=env_kwargs, hyperparams=HYPERPARAMS)

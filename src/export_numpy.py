@@ -27,6 +27,7 @@ def export(model_path, out_path):
         ekw = dict(cfg.get("env_kwargs", {}), obs_q=cfg.get("obs_q", True))
     arrays["obs_q"] = np.array(bool(ekw.get("obs_q", True)))
     arrays["multiscale_obs"] = np.array(bool(ekw.get("multiscale_obs", False)))
+    arrays["history"] = np.array(int(ekw.get("history", 0)))
     np.savez(out_path, **arrays)
 
 

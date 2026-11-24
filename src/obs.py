@@ -13,6 +13,8 @@ Layout of the observation vector (all entries roughly of order 1):
              e / max(|e|, 1e-9) (3), log10(max(|e|, 1e-4)) / 4 (1), tanh(e / s) for s = 1, 0.1, 0.01 m (9)
     [49:62]  multi-scale orientation block of theta*u     (zeros when multiscale is False)
              same layout, with theta = |theta*u| and s = 1, 0.1, 0.01 rad
+Optional history (history = h > 0): h entries of HIST_ENTRY = 12 values are appended after the 62 above, newest first
+(see history_entry); zeros at the start of an episode.
 Every entry is a measurement of the tool or the target; no model, Jacobian or wrist position.
 """
 import numpy as np
@@ -20,6 +22,7 @@ import numpy as np
 from kr16 import QMAX, QMIN, tu_of
 
 OBS_DIM = 62
+HIST_ENTRY = 12   # values per past step in the optional history (see history_entry)
 SCALES_POS = (1.0, 0.1, 0.01)   # m
 SCALES_ROT = (1.0, 0.1, 0.01)   # rad
 
@@ -55,3 +58,23 @@ def build_obs(q, M, M_star, prev_action, obs_q=True, multiscale=False):
         obs[36:49] = multiscale_block(ps - p, SCALES_POS)
         obs[49:62] = multiscale_block(orientation_error(R, Rs), SCALES_ROT)
     return obs
+
+
+def obs_dim(history=0):
+    """Length of the observation with `history` past steps appended."""
+    return OBS_DIM + int(history) * HIST_ENTRY
+
+
+def history_entry(M_prev, M, action):
+    """12 values describing one control step: tool motion and the action that caused it.
+
+    [0:3]  (p - p_prev) / 0.1 m, clipped to [-3, 3]
+    [3:6]  theta*u of R * R_prev^T (base frame) / 0.1 rad, clipped to [-3, 3]
+    [6:12] the action in [-1, 1]
+    """
+    e = np.empty(HIST_ENTRY, dtype=np.float32)
+    e[0:3] = (M[:3, 3] - M_prev[:3, 3]) / 0.1
+    e[3:6] = tu_of(M[:3, :3] @ M_prev[:3, :3].T) / 0.1
+    e[0:6] = np.clip(e[0:6], -3.0, 3.0)
+    e[6:12] = np.asarray(action, dtype=np.float32)
+    return e

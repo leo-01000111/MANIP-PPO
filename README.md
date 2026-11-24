@@ -28,6 +28,7 @@ A lab-style Jacobian controller (Exercise 6, full model knowledge) is the baseli
 
 Optional toggles of `train.py` (all off by default; stored in `config.json`, and `evaluate.py` / `export_numpy.py` read them from it):
 - `--reward {distance,progress,log_progress}`: `log_progress` pays log(d_prev) - log(d), the same at 1 m and at 1 cm.
+- `--history N`: appends the last N steps (tool motion and action, 12 values each, newest first, zeros at reset) to the observation; default 0.
 - `--multiscale-obs`: fills the last 26 observation entries (direction, log-norm, tanh at 3 scales of the position and orientation errors); zeros otherwise.
 - `--sde [--sde-freq N]`: gSDE exploration. `--log-std-init x` sets the initial action noise.
 - `--tol-start m [--tol-frac f] [--pos-tol m]`: accuracy curriculum, tolerance decays geometrically from `m` to `--pos-tol` (default 0.01) over the first fraction `f` of the steps; the periodic evaluation always uses `--pos-tol`.

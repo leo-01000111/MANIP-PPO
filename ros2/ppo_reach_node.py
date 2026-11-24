@@ -69,8 +69,8 @@ class PPOReach(Node):
             self.tfbuf = Buffer()
             self.tfl = TransformListener(self.tfbuf, self)
         self.timer = self.create_timer(ppo_core.DT, self.tick)
-        self.get_logger().info("obs_q=%s multiscale=%s target=%s" % (
-            self.ctl.pol.obs_q, self.ctl.pol.multiscale_obs, np.round(M_star[:3, 3], 3)))
+        self.get_logger().info("obs_q=%s multiscale=%s history=%d target=%s" % (
+            self.ctl.pol.obs_q, self.ctl.pol.multiscale_obs, self.ctl.pol.history, np.round(M_star[:3, 3], 3)))
 
     def on_js(self, msg):
         if msg.name and set(self.names) <= set(msg.name):

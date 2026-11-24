@@ -18,10 +18,11 @@ ppo_core.add_src_to_path()
 from kr16 import KR16, QMAX, QMIN  # noqa: E402
 
 
-def make_dummy(path, obs_q=True, multiscale=False, seed=0):
+def make_dummy(path, obs_q=True, multiscale=False, seed=0, history=0):
     rng = np.random.default_rng(seed)
-    sizes = [62, 16, 16, 6]
-    d = {"n_layers": np.array(3), "obs_q": np.array(obs_q), "multiscale_obs": np.array(multiscale)}
+    sizes = [62 + 12 * history, 16, 16, 6]
+    d = {"n_layers": np.array(3), "obs_q": np.array(obs_q), "multiscale_obs": np.array(multiscale),
+         "history": np.array(history)}
     for i in range(3):
         d[f"W{i}"] = rng.normal(0, 0.3, (sizes[i + 1], sizes[i]))
         d[f"b{i}"] = np.zeros(sizes[i + 1])
