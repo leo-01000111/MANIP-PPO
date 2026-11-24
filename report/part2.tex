@@ -275,7 +275,17 @@ The agent without $q$ learns much more slowly.
 \end{itemize}}
 
 \head{7. Conclusion}
-\todo{Outline: what worked, the cost (millions of simulated steps vs zero for the model-based law), no stability guarantee, when a learned controller makes sense; replay of the numpy policy in the lab's RViz simulator (ROS2 node).}
+\todo{Outline:
+\begin{itemize}
+\item Framing: a benchmark, not a better reaching method. On a task where the model-based answer is known, measure what a model-free learner reaches, what it costs, and where it fails or succeeds differently.
+\item What worked: final numbers (PPO with $q$ vs Jacobian at 1 cm), reproducible over seeds; without $q$ much harder; effect of the memory.
+\item The model does not have to be exact: a policy trained on the nominal robot works with $a_3$ changed by 7 cm. This comes from closed-loop feedback on the measured pose, not from PPO itself (the Jacobian law fed the measured pose keeps about 57\,\%).
+\item Learning finds behaviour a local law cannot: 8.7\,\% of targets solved only by PPO (large base rotations, change of configuration). The Jacobian law follows a straight line and stops at a joint limit; a policy can learn a detour.
+\item The cost, stated plainly: millions of simulated trials and no stability guarantee, against zero trials and a convergence proof for the Jacobian law.
+\item Catch: the simulator \emph{is} the kinematic model. Without a model there is nothing to train in; training on the real robot would take $12\cdot10^6 \times 0.05$\,s $\approx$ 170\,h of motion. So ``no model'' means ``no model in the controller'', not ``no model anywhere''.
+\item When learning pays off: where the model is hard to write (contacts, deformable objects, dynamics) or where global decisions matter (configuration changes). Reaching on a known arm is the control case that makes this measurable.
+\item Replay of the numpy policy in the lab's RViz simulator (ROS2 node).
+\end{itemize}}
 
 \begin{thebibliography}{9}
 \bibitem{ppo} J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford and O.~Klimov, ``Proximal policy optimization algorithms,'' arXiv:1707.06347, 2017.
