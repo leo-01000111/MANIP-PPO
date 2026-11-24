@@ -1,6 +1,7 @@
 % MANIP report, Part II (personal project, 5 pages): a kinematics-agnostic PPO reaching agent on the KR16.
 % Same preamble as manip_report.tex, so the body can be pasted between the Part II header and the bibliography.
 % Build: pdflatex part2.tex (twice)
+% STATUS: outline only (bullets in red). Prose to be written after cherubini.md.
 \documentclass[10pt,a4paper]{article}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
@@ -36,28 +37,74 @@
 % =====================================================================
 
 \head{1. Goal}
-\todo{Question: can a policy that never sees the kinematic model learn to reach target poses on the KR16? Agent outputs joint velocities, closed loop. Retrained per robot.}
+\todo{Outline (about 1/4 page):
+\begin{itemize}
+\item Question: can a policy that never sees the kinematic model learn to bring the KR16 tool to a target position, then a full pose?
+\item Same robot and same tolerance as Part I, Ex 6, so the Jacobian controller is a fair reference.
+\item What ``agnostic'' means here: the DH model is only the hidden simulator; the agent only sees measurements.
+\item Main results in one line each (fill in at the end): success at 1 cm, with vs without q, pose, changed $a_3$.
+\end{itemize}}
 
 \head{2. Working principle of PPO}
-\todo{About 1 page: policy and value networks (actor-critic), advantage and GAE, clipped objective. Link to the BEng thesis.}
+\todo{Outline (about 1 page, equations on their own lines):
+\begin{itemize}
+\item Markov decision process: state, action, reward, return with discount $\gamma$.
+\item Stochastic policy $\pi_\theta(a|s)$: Gaussian, mean from a neural network, std learned.
+\item Policy gradient idea: raise the probability of actions that did better than expected.
+\item Value network $V_\phi(s)$ and advantage $A = $ return $-$ $V$; GAE with $\lambda$ (one equation).
+\item Probability ratio $r_t(\theta)$ and the clipped objective (the key equation of PPO).
+\item Why clipping: a cheap trust region; several epochs on one batch of data.
+\item Full loss: policy term + value loss + entropy term; these are the curves of the loss figure.
+\item Link to my BEng thesis (PPO vs robust MPC), one sentence.
+\end{itemize}}
 
 \head{3. Environment}
-\todo{Hidden world = validated KR16 direct model. Observation (with and without q), action q-dot, reward, episode, success tolerance.}
+\todo{Outline (about 3/4 page):
+\begin{itemize}
+\item Hidden world: validated KR16 direct model (Part I); integrates $q \leftarrow q + \dot q\,\Delta t$, $\Delta t = 0.05$ s, 100 steps per episode, joint limits clipped.
+\item Action: $\dot q = a \cdot 0.5 \cdot v_{max}$, $a \in [-1,1]^6$.
+\item Observation table: with q / without q; tool pose, target pose, error, previous action, multi-scale error (direction, $\log_{10}$ of the norm, $\tanh(e/s)$ for $s=1,0.1,0.01$ m).
+\item Reward: log-progress (scale-free, equation), action penalty, $+1$ and stop at success.
+\item Start and target: random joint vectors inside the limits, target pose = forward model of it (always reachable).
+\item Why the two scales problem (1 m vs 1 mm) and the three tricks used: log reward, multi-scale observation, (optional) tolerance curriculum.
+\end{itemize}}
 
 \head{4. Training}
-\todo{SB3 PPO, hyperparameters, seeds, learning curves.}
+\todo{Outline (about 3/4 page):
+\begin{itemize}
+\item Stable-Baselines3 PPO, networks $2 \times 256$ tanh; table of hyperparameters (rollout 4096, batch 512, 10 epochs, $\gamma=0.98$, $\lambda=0.95$, clip 0.2, lr $3\cdot10^{-4}$ decayed, target KL 0.02).
+\item Fixed evaluation set (200 episodes, same seed) every 100k steps.
+\item Story of the instability: first runs collapsed (KL up to 0.6, clip fraction 0.6); fix = target KL + lr decay + bigger rollouts. Short, one figure panel.
+\item Figure: learning curves (success at 1 cm, median error) --- \texttt{figures/learning\_*.pdf}.
+\item Figure: loss curves (value, policy, entropy, KL, clip fraction, std) --- \texttt{figures/losses\_*.pdf}.
+\item Seeds and run time on a laptop CPU.
+\end{itemize}}
 
 \head{5. Results}
-\todo{PPO vs Jacobian control (Ex 6): success rate, final error, steps to reach. Input with vs without q.}
+\todo{Outline (about 1 page):
+\begin{itemize}
+\item Table: PPO (with q, without q) vs Jacobian control: success at 1 cm, median final error, mean steps to reach; 500 test episodes.
+\item With vs without q: one tool pose comes from up to 8 configurations; does the agent still manage?
+\item Pose (6D) stage: same network, orientation weight raised; success at 1 cm + 5 deg.
+\item Figure: a few 3D tool trajectories, PPO vs Jacobian.
+\item Honest limits: precision tail, failures near the joint limits and the wrist singularity.
+\end{itemize}}
 
 \head{6. Robustness to a changed link length}
-\todo{a3 changed; Jacobian control with the old model vs retrained PPO.}
+\todo{Outline (about 1/2 page):
+\begin{itemize}
+\item $a_3$: 0.68 $\to$ 0.75 m.
+\item Jacobian control with the old model and the tool pose from the old model: almost never succeeds (0.8\,\%).
+\item Nuance to state: with the tool pose \emph{measured} on the real robot, the old Jacobian still reaches about 57\,\% (feedback corrects a wrong model).
+\item PPO retrained / fine-tuned on the new robot: success and training cost.
+\end{itemize}}
 
 \head{7. Conclusion}
-\todo{Also: replay of the policy in the lab's RViz simulator.}
+\todo{Outline: what worked, what it costs (millions of steps vs zero for the model-based law), when a learned controller makes sense; replay of the numpy policy in the lab's RViz simulator (ROS2 node).}
 
 \begin{thebibliography}{9}
 \bibitem{ppo} J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford and O.~Klimov, ``Proximal policy optimization algorithms,'' arXiv:1707.06347, 2017.
+\todo{add: Schulman et al.\ 2016 (GAE, arXiv:1506.02438); Raffin et al.\ 2021 (Stable-Baselines3, JMLR 22(268)); Towers et al.\ 2024 (Gymnasium, arXiv:2407.17032); Raffin et al.\ 2022 (gSDE, CoRL 2021/PMLR 164) if gSDE is mentioned.}
 \end{thebibliography}
 
 \end{document}
