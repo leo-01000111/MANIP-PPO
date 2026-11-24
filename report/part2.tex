@@ -214,31 +214,7 @@ initial $\sigma$ & $e^{-1} \approx 0.37$ & rewards & normalised by a running std
 \end{table}
 \todo{Update $\gamma$, episode length and the joint-limit penalty if batch Y changes the final setup.}
 
-\sub{4.2 A failure and its fix}
-In the first runs, the success rate grew for 3 million steps and then fell.
-The loss curves show why (Fig.~\ref{fig:losses}, blue).
-The exploration noise $\sigma$ shrank from 0.37 to 0.014.
-With such a narrow Gaussian, even a small move of the mean changes the action probabilities a lot.
-The approximate KL divergence between successive policies grew to 0.5, and 60\,\% of the samples hit the clip.
-At that point the clipping no longer bounds the step: the trust region is lost and the policy drifts.
-
-The problem was fixed by three changes (Fig.~\ref{fig:losses}, red):
-\begin{itemize}\setlength{\itemsep}{0pt}
-\item the epochs of a batch are stopped as soon as the KL exceeds $1.5 \times 0.02$;
-\item the learning rate decays linearly to zero;
-\item 4 times more data is collected per batch, which gives a less noisy gradient.
-\end{itemize}
-The KL then stays near its target, the clip fraction stays near 0.25 and $\sigma$ decreases slowly.
-State-dependent exploration (gSDE), used in the first runs, was also replaced by plain Gaussian noise, which gave better results.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=\linewidth]{figures/losses_stability.pdf}
-\caption{Training losses and diagnostics. Blue: first runs, unstable. Red: with KL early stop, learning-rate decay and larger batches. Curves averaged over 10 updates.}
-\label{fig:losses}
-\end{figure}
-
-\sub{4.3 Learning curves}
+\sub{4.2 Learning curves and losses}
 Fig.~\ref{fig:learning} shows the success rate and the median final error on the 200 test episodes.
 Two seeds of the agent with $q$ give almost the same curve.
 The success rate grows quickly up to about 40\,\% at 6 million steps, then slowly.
@@ -247,11 +223,25 @@ The agent without $q$ learns much more slowly.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/learning_batchU.pdf}
+\includegraphics[width=\linewidth]{figures/learning_final.pdf}
 \caption{Learning curves on 200 fixed test episodes: success rate at 1\,cm and median final error. Dashed: Jacobian controller.}
 \label{fig:learning}
 \end{figure}
-\todo{Replace with the final runs (batch Y, X1) if they change the picture. The curriculum run (green) can go: it gave no gain.}
+
+Fig.~\ref{fig:losses} shows the terms of the loss and two diagnostics of the update size.
+The approximate KL divergence between successive policies stays near its target of 0.02, and about 25\,\% of the samples hit the clip.
+Both fall to zero at the end, when the learning rate reaches zero.
+The exploration noise $\sigma$ decreases from 0.37 to about 0.06: the policy becomes more and more deterministic.
+The entropy loss (minus the entropy) rises for the same reason.
+The value loss of the agent without $q$ stays higher: without the joint angles, the critic cannot predict the return as well.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/losses_final.pdf}
+\caption{Training losses and diagnostics of the same runs, averaged over 10 updates. Dashed: target KL.}
+\label{fig:losses}
+\end{figure}
+\todo{Swap both figures for the final runs (batch Y, X1) when they are done.}
 
 \head{5. Results}
 \todo{Outline:
