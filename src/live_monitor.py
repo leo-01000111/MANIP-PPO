@@ -40,14 +40,13 @@ def read(run):
 
 
 def status(run, prog, cfg):
-    """Steps done / to do, elapsed time and predicted finish (from the step rate of the last ~10 updates)."""
+    """Steps done / to do, elapsed time and predicted finish (from the average step rate of the run)."""
     if prog is None or len(prog) < 3 or "time/total_timesteps" not in prog:
         return f"{run}: starting ..."
     ts, el = prog["time/total_timesteps"].to_numpy(), prog["time/time_elapsed"].to_numpy()
     start = ts[0] - (ts[1] - ts[0])                     # step count when this run began (warm starts begin > 0)
     done, todo = ts[-1] - start, cfg["steps"]
-    k = max(0, len(ts) - 11)
-    rate = (ts[-1] - ts[k]) / max(el[-1] - el[k], 1e-6)  # steps per second, recent
+    rate = (ts[-1] - ts[0]) / max(el[-1] - el[0], 1e-6)  # steps per second, whole run (includes eval pauses)
     left = max(todo - done, 0) / max(rate, 1e-6)
     eta = (dt.datetime.now() + dt.timedelta(seconds=left)).strftime("%H:%M")
     return (f"{run}: {done / 1e6:5.2f} / {todo / 1e6:.0f} M steps ({100 * done / todo:4.1f} %), "
