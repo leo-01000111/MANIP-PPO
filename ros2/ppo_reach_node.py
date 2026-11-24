@@ -138,7 +138,8 @@ def main():
     except (SystemExit, KeyboardInterrupt):
         pass
     node.destroy_node()
-    rclpy.shutdown()
+    if rclpy.ok():                 # Ctrl+C may already have shut the context down
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":

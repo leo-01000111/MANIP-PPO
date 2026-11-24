@@ -4,12 +4,19 @@ The node `ppo_reach_node.py` replaces `control.cpp`. It reads the joints and the
 asks the numpy policy for an action, and sends a joint command every 0.05 s.
 No torch is needed. Only numpy, rclpy and tf2_ros (all in the ROS 2 install).
 
-## What I could not verify
-The handout does not name topics. These names come from your lab notes and are only a guess:
-- joint states: `/joint_states` (sensor_msgs/JointState)
-- command: `/main_control/command` (sensor_msgs/JointState, joint positions)
-- tool pose: TF `base_link` -> `tool0`
+## Verified in the school VM (2026-11-24, Ubuntu 24.04, ROS 2 Jazzy)
+- joint states: `/joint_states` (published by the lab's `arm_bridge.py`)
+- command: `/main_control/command` (sensor_msgs/JointState; the bridge accepts positions or velocities)
+- tool pose: TF `base_link` -> `tool0` agrees exactly with `src/kr16.py` (position and rotation)
 - joint names: `joint_a1` ... `joint_a6`
+- **Use `command_type:=position` (the default).** It matches training (q_next = q + qdot * dt).
+  With `velocity`, the bridge keeps the last velocity until the next command; the tool gets within
+  2-7 cm and then oscillates.
+- Result: from the slider start q = [0, -1.05, 0.21, 0, 0, 0] to target
+  `target_xyz:="[0.4212, 0.428, 1.0862]"`, `target_tu:="[-1.2667, 0.7953, 0.4718]"`:
+  REACHED, 5.8 mm in 3.0 s. Lab target A is one of the targets this policy misses (about half are missed).
+- If the lab GUI crashes with a TkAgg error when launched from a script, `export MPLBACKEND=QtAgg` first
+  (the VM's `.bashrc` does this in a normal terminal).
 
 All of them are parameters. Step 3 checks them.
 
