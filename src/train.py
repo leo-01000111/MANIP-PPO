@@ -127,6 +127,8 @@ def main():
     ap.add_argument("--multiscale-obs", action=argparse.BooleanOptionalAction, default=True, help="fill the multi-scale error block of the observation")
     ap.add_argument("--gamma", type=float, default=HYPERPARAMS["gamma"], help="discount factor (also overrides a warm-started model)")
     ap.add_argument("--max-steps", type=int, default=100, help="episode length in control steps of 0.05 s")
+    ap.add_argument("--time-penalty", type=float, default=0.0, help="reward cost per step (favours short, fast reaches)")
+    ap.add_argument("--reset-std", type=float, default=None, help="warm start: reset the exploration std to this value (re-opens exploration for a new task)")
     ap.add_argument("--limit-penalty", type=float, default=0.0, help="reward cost per joint pushed against its limit in a step")
     ap.add_argument("--history", type=int, default=0, help="number of past steps (tool motion + action, 12 values each) appended to the observation")
     ap.add_argument("--sde", action=argparse.BooleanOptionalAction, default=True, help="gSDE exploration (use_sde=True)")
@@ -152,7 +154,7 @@ def main():
     out_dir = os.path.join("runs", args.name)
     os.makedirs(out_dir, exist_ok=True)
     HYPERPARAMS["gamma"] = args.gamma
-    env_kwargs = dict(max_steps=args.max_steps, limit_penalty=args.limit_penalty, obs_q=args.obs_q, task=args.task, w_rot=args.w_rot, a3=args.a3, reward_mode=args.reward,
+    env_kwargs = dict(max_steps=args.max_steps, limit_penalty=args.limit_penalty, time_penalty=args.time_penalty, obs_q=args.obs_q, task=args.task, w_rot=args.w_rot, a3=args.a3, reward_mode=args.reward,
                       multiscale_obs=args.multiscale_obs, pos_tol=args.pos_tol, history=args.history)
     if args.threads:
         torch.set_num_threads(args.threads)
@@ -174,6 +176,9 @@ def main():
         venv = VecNormalize(venv, norm_obs=False, norm_reward=True, gamma=HYPERPARAMS["gamma"])
     if args.init_from:
         model = PPO.load(args.init_from, env=venv, device="cpu", custom_objects={"seed": args.seed, "gamma": args.gamma})
+        if args.reset_std:
+            with torch.no_grad():
+                model.policy.log_std.fill_(float(np.log(args.reset_std)))
     else:
         model = PPO("MlpPolicy", venv, policy_kwargs=dict(POLICY_KWARGS, log_std_init=args.log_std_init), seed=args.seed, device="cpu",
                     verbose=0, use_sde=args.sde, sde_sample_freq=args.sde_freq, target_kl=args.target_kl,

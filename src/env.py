@@ -31,10 +31,11 @@ class KR16ReachEnv(gym.Env):
 
     def __init__(self, obs_q=True, task="position", w_rot=0.0, a3=0.68, dt=0.05, max_steps=100,
                  speed_scale=0.5, pos_tol=0.01, rot_tol=np.deg2rad(5), reward_mode="distance", multiscale_obs=False,
-                 history=0, limit_penalty=0.0):
+                 history=0, limit_penalty=0.0, time_penalty=0.0):
         assert task in ("position", "pose") and reward_mode in ("distance", "progress", "log_progress")
         self.multiscale_obs = multiscale_obs
         self.history = int(history)
+        self.time_penalty = float(time_penalty)     # reward cost per step (favours reaching sooner)
         self.limit_penalty = float(limit_penalty)   # reward cost per joint pushed against its limit in a step
         self.reward_mode = reward_mode
         self.obs_q, self.task, self.w_rot = obs_q, task, w_rot
@@ -109,7 +110,7 @@ class KR16ReachEnv(gym.Env):
             # progress: reward the decrease of the error in this step (potential-based shaping, 10 per m)
             reward = 10.0 * ((self._prev_err[0] - pos_err) + self.w_rot * (self._prev_err[1] - rot_err))
         self._prev_err = (pos_err, rot_err)
-        reward += -0.01 * float(a @ a) + (1.0 if success else 0.0) - self.limit_penalty * n_at_limit
+        reward += -0.01 * float(a @ a) + (1.0 if success else 0.0) - self.limit_penalty * n_at_limit - self.time_penalty
         truncated = (not success) and self.steps >= self.max_steps
         info = {"pos_err": pos_err, "rot_err": rot_err, "is_success": bool(success), "q": self.q.copy()}
         return self._obs(), reward, bool(success), truncated, info
