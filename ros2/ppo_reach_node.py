@@ -46,6 +46,7 @@ class PPOReach(Node):
         P("check_rot", False)
         P("timeout", 10.0)                        # s
         P("dry_run", False)                       # compute and log, send nothing
+        P("hold", True)                           # after REACHED/TIMEOUT keep sending the final pose
 
         def g(n):
             return self.get_parameter(n).value
@@ -62,6 +63,7 @@ class PPOReach(Node):
         self.base, self.tool = g("base_frame"), g("tool_frame")
         self.q = None
         self.t0 = None
+        self.hold, self.held_q = g("hold"), None
         self.sub = self.create_subscription(JointState, g("joint_state_topic"), self.on_js, 10)
         self.pub = self.create_publisher(JointState, g("command_topic"), 10)
         if self.pose_source == "tf":
@@ -106,6 +108,12 @@ class PPOReach(Node):
             self.pub.publish(m)
 
     def tick(self):
+        if self.held_q is not None:                 # done: keep sending the final pose, or the lab
+            m = JointState()                        # bridge returns to the GUI sliders after 0.5 s
+            m.name, m.position = self.names, [float(v) for v in self.held_q]
+            if not self.dry:
+                self.pub.publish(m)
+            return
         if self.q is None:
             self.get_logger().info("waiting for joint states ...", throttle_duration_sec=2.0)
             return
@@ -122,6 +130,10 @@ class PPOReach(Node):
                 self.send(self.q, np.zeros(6))
             self.get_logger().info("%s: position error %.4f m, orientation error %.2f deg, time %.1f s" % (
                 "REACHED" if done else "TIMEOUT", e_p, np.rad2deg(e_r), time.time() - self.t0))
+            if self.hold:
+                self.held_q = self.q.copy()
+                self.get_logger().info("holding the final pose (Ctrl+C to stop)")
+                return
             self.timer.cancel()
             raise SystemExit
         qdot = self.ctl.step(self.q, M)
