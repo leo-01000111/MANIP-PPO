@@ -84,14 +84,17 @@ class FixedSetEval(BaseCallback):
 
 
 class TolCurriculum(BaseCallback):
-    """Position tolerance decays geometrically from tol_start to tol_final over the first `frac` of the run.
+    """A tolerance decays geometrically from tol_start to tol_final over the first `frac` of the run.
+
+    `setter` is the env method to call ("set_pos_tol" in m, "set_rot_tol" in rad); `tag` names the logged value.
 
     tol(t) = tol_start * (tol_final / tol_start)^min(t / (frac * total), 1), t counted from the start of this run.
     Updated at every rollout start through venv.env_method (works through VecNormalize, which forwards it).
     """
 
-    def __init__(self, tol_start, tol_final, frac, total_steps):
+    def __init__(self, tol_start, tol_final, frac, total_steps, setter="set_pos_tol", tag="train/pos_tol"):
         super().__init__()
+        self.setter, self.tag = setter, tag
         self.tol_start, self.tol_final, self.frac, self.total = tol_start, tol_final, frac, total_steps
         self.t0 = None
 
@@ -104,8 +107,8 @@ class TolCurriculum(BaseCallback):
 
     def _on_rollout_start(self):
         v = self.tol(self.num_timesteps - self.t0)
-        self.training_env.env_method("set_pos_tol", v)
-        self.logger.record("train/pos_tol", v)
+        self.training_env.env_method(self.setter, v)
+        self.logger.record(self.tag, v)
 
     def _on_step(self):
         return True
@@ -123,7 +126,7 @@ def main():
     ap.add_argument("--a3", type=float, default=0.68)
     ap.add_argument("--init-from", default=None)
     ap.add_argument("--eval-freq", type=int, default=50_000)
-    ap.add_argument("--reward", choices=["distance", "progress", "log_progress"], default="log_progress")
+    ap.add_argument("--reward", choices=["distance", "progress", "log_progress", "keypoint"], default="log_progress")
     ap.add_argument("--multiscale-obs", action=argparse.BooleanOptionalAction, default=True, help="fill the multi-scale error block of the observation")
     ap.add_argument("--gamma", type=float, default=HYPERPARAMS["gamma"], help="discount factor (also overrides a warm-started model)")
     ap.add_argument("--max-steps", type=int, default=100, help="episode length in control steps of 0.05 s")
@@ -136,6 +139,8 @@ def main():
     ap.add_argument("--pos-tol", type=float, default=0.01, help="final position tolerance (m)")
     ap.add_argument("--tol-start", type=float, default=None, help="initial tolerance of the accuracy curriculum (m)")
     ap.add_argument("--tol-frac", type=float, default=0.5, help="fraction of the steps over which the tolerance decays")
+    ap.add_argument("--rot-tol-start", type=float, default=None, help="initial orientation tolerance (deg) of the accuracy curriculum, decays to 5 deg over --tol-frac")
+    ap.add_argument("--target-rot-range", type=float, default=None, help="deg: sample only targets within this angle of the tool-down orientation Rot(x, pi)")
     ap.add_argument("--log-std-init", type=float, default=-1.0, help="initial log of the action noise std")
     ap.add_argument("--norm-reward", action=argparse.BooleanOptionalAction, default=True, help="VecNormalize on rewards only (obs untouched)")
     ap.add_argument("--threads", type=int, default=0, help="torch threads (0 = torch default)")
@@ -156,6 +161,8 @@ def main():
     HYPERPARAMS["gamma"] = args.gamma
     env_kwargs = dict(max_steps=args.max_steps, limit_penalty=args.limit_penalty, time_penalty=args.time_penalty, obs_q=args.obs_q, task=args.task, w_rot=args.w_rot, a3=args.a3, reward_mode=args.reward,
                       multiscale_obs=args.multiscale_obs, pos_tol=args.pos_tol, history=args.history)
+    if args.target_rot_range is not None:      # only stored when used, so old configs stay identical
+        env_kwargs["target_rot_range"] = float(np.deg2rad(args.target_rot_range))
     if args.threads:
         torch.set_num_threads(args.threads)
     config = dict(vars(args), env_kwargs=env_kwargs, hyperparams=HYPERPARAMS)
@@ -165,6 +172,8 @@ def main():
     set_random_seed(args.seed)
     vec_cls = SubprocVecEnv if args.vec == "subproc" else DummyVecEnv
     train_kwargs = dict(env_kwargs, pos_tol=args.tol_start if args.tol_start else args.pos_tol)
+    if args.rot_tol_start:
+        train_kwargs["rot_tol"] = float(np.deg2rad(args.rot_tol_start))
     venv = make_vec_env(KR16ReachEnv, n_envs=args.n_envs, seed=args.seed, env_kwargs=train_kwargs,
                         vec_env_cls=vec_cls, monitor_dir=out_dir,
                         monitor_kwargs=dict(info_keywords=("is_success", "pos_err")))
@@ -189,6 +198,9 @@ def main():
     callbacks = [FixedSetEval(env_kwargs, out_dir, args.eval_freq)]       # always at the final tolerance
     if args.tol_start:
         callbacks.append(TolCurriculum(args.tol_start, args.pos_tol, args.tol_frac, args.steps))
+    if args.rot_tol_start:
+        callbacks.append(TolCurriculum(np.deg2rad(args.rot_tol_start), np.deg2rad(5), args.tol_frac,
+                                       args.steps, setter="set_rot_tol", tag="train/rot_tol"))
     model.learn(args.steps, callback=callbacks, reset_num_timesteps=not args.init_from)
     model.save(os.path.join(out_dir, "final_model"))
     if isinstance(venv, VecNormalize):

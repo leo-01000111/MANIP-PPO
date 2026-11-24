@@ -32,6 +32,9 @@ Optional toggles of `train.py` (all off by default; stored in `config.json`, and
 - `--multiscale-obs`: fills the last 26 observation entries (direction, log-norm, tanh at 3 scales of the position and orientation errors); zeros otherwise.
 - `--sde [--sde-freq N]`: gSDE exploration. `--log-std-init x` sets the initial action noise.
 - `--tol-start m [--tol-frac f] [--pos-tol m]`: accuracy curriculum, tolerance decays geometrically from `m` to `--pos-tol` (default 0.01) over the first fraction `f` of the steps; the periodic evaluation always uses `--pos-tol`.
+- `--reward keypoint`: log-progress reward on one keypoint error (mean distance of the 3 points p + R * 0.15 m * e_i between tool and target); `--w-rot` is ignored.
+- `--rot-tol-start deg`: orientation tolerance curriculum, decays geometrically from `deg` to 5 deg over the same `--tol-frac` as `--tol-start` (both can run together); the evaluation uses 5 deg.
+- `--target-rot-range deg`: only targets whose orientation is within `deg` of the tool-down pose Rot(x, pi) (rejection sampling; the start stays unrestricted).
 - `--norm-reward`: VecNormalize on rewards, saved as `vecnormalize.pkl` and reloaded by `--init-from`.
 Observation size is 62 (36 + 26 multi-scale); models trained before this change (36) do not load.
 
