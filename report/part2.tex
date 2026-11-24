@@ -1,7 +1,7 @@
 % MANIP report, Part II (personal project, 5 pages): a kinematics-agnostic PPO reaching agent on the KR16.
 % Same preamble as manip_report.tex, so the body can be pasted between the Part II header and the bibliography.
 % Build: pdflatex part2.tex (twice)
-% STATUS: outline only (bullets in red). Prose to be written after cherubini.md.
+% STATUS: sections 1-4 drafted; sections 5-7 still an outline (wait for batch Y and X1).
 \documentclass[10pt,a4paper]{article}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
@@ -37,74 +37,254 @@
 % =====================================================================
 
 \head{1. Goal}
-\todo{Outline (about 1/4 page):
-\begin{itemize}
-\item Question: can a policy that never sees the kinematic model learn to bring the KR16 tool to a target position, then a full pose?
-\item Same robot and same tolerance as Part I, Ex 6, so the Jacobian controller is a fair reference.
-\item What ``agnostic'' means here: the DH model is only the hidden simulator; the agent only sees measurements.
-\item Main results in one line each (fill in at the end): success at 1 cm, with vs without q, pose, changed $a_3$.
-\end{itemize}}
+In Part I the KR16 reached a target with the Jacobian velocity controller of Exercise 6.
+That controller needs the kinematic model: the direct model $f_{M_e}(q)$ and the Jacobian $J(q)$.
+
+Here I ask a different question.
+Can a controller that never sees the model learn the same task from trial and error?
+
+The agent is a neural network trained with Proximal Policy Optimization (PPO) \cite{ppo}.
+It commands the six joint velocities $\dot q$ at every control step, in closed loop.
+The DH model of Part I still exists, but only inside the simulator, hidden from the agent.
+The agent only gets measurements: the tool pose, the target pose and, in one version, the joint angles $q$.
+It uses no DH parameters, no Jacobian and no wrist centre.
+In this sense it is \emph{kinematics-agnostic}.
+
+The Jacobian controller of Exercise 6 is the reference.
+Both controllers get the same targets, the same speed limits, the same time and the same 1\,cm tolerance.
+
+\todo{One line per main result, filled in at the end: success at 1 cm (PPO vs Jacobian), with vs without $q$, changed $a_3$.}
 
 \head{2. Working principle of PPO}
-\todo{Outline (about 1 page, equations on their own lines):
-\begin{itemize}
-\item Markov decision process: state, action, reward, return with discount $\gamma$.
-\item Stochastic policy $\pi_\theta(a|s)$: Gaussian, mean from a neural network, std learned.
-\item Policy gradient idea: raise the probability of actions that did better than expected.
-\item Value network $V_\phi(s)$ and advantage $A = $ return $-$ $V$; GAE with $\lambda$ (one equation).
-\item Probability ratio $r_t(\theta)$ and the clipped objective (the key equation of PPO).
-\item Why clipping: a cheap trust region; several epochs on one batch of data.
-\item Full loss: policy term + value loss + entropy term; these are the curves of the loss figure.
-\item Link to my BEng thesis (PPO vs robust MPC), one sentence.
-\end{itemize}}
+\sub{2.1 The problem}
+At step $t$ the agent sees the state $s_t$, takes the action $a_t$ and receives a reward $r_t$.
+Its policy $\pi_\theta(a|s)$ is a neural network with weights $\theta$.
+Training searches for the $\theta$ that maximises the expected discounted return:
+\begin{eq}
+J(\theta) = \mathbb{E}_{\pi_\theta}\Big[\sum_{t=0}^{T} \gamma^t\, r_t\Big], \qquad 0<\gamma<1
+\end{eq}
+This is a gradient ascent on $J$.
+The difficulty is that $J$ is only known through experiments, so its gradient must be estimated.
+
+\sub{2.2 From finite differences to the likelihood ratio}
+The classic way for a robot is finite differences \cite{kohl}.
+Each parameter is perturbed by $\pm\epsilon$, each perturbed policy is run, and the change of the return gives one gradient component:
+\begin{eq}
+\frac{\partial J}{\partial \theta_j} \approx \frac{J(\theta + \epsilon\, e_j) - J(\theta - \epsilon\, e_j)}{2\,\epsilon}
+\end{eq}
+This works for a few dozen parameters.
+My policy network has about $8.3\cdot 10^4$ weights, so one gradient would need $1.7\cdot 10^5$ experiments.
+
+Policy-gradient methods put the randomness in the \emph{action} instead \cite{williams}.
+The policy is a Gaussian: the network gives the mean, and a learned standard deviation $\sigma$ adds exploration noise:
+\begin{eq}
+a_t \sim \mathcal{N}\big(\mu_\theta(s_t),\ \mathrm{diag}(\sigma^2)\big)
+\end{eq}
+Then the gradient of $J$ can be written with the log-probability of the actions that were actually taken:
+\begin{eq}
+\nabla_\theta J = \mathbb{E}\Big[\sum_t \nabla_\theta \log \pi_\theta(a_t|s_t)\ \hat A_t\Big]
+\end{eq}
+One batch of episodes now gives the gradient for all weights at once.
+The idea is simple: make the good actions more likely and the bad actions less likely.
+$\hat A_t$, the \emph{advantage}, says how good the action was.
+
+\sub{2.3 The critic and the advantage}
+A second network, the critic $V_\phi(s)$, learns the expected return from state $s$.
+The advantage compares what happened with what the critic expected.
+PPO uses generalised advantage estimation (GAE) \cite{gae}:
+\begin{eq}
+\delta_t = r_t + \gamma\, V_\phi(s_{t+1}) - V_\phi(s_t), \qquad \hat A_t = \sum_{l \ge 0} (\gamma\lambda)^l\, \delta_{t+l}
+\end{eq}
+$\lambda \in [0,1]$ sets the trade-off between bias ($\lambda=0$, trust the critic) and variance ($\lambda=1$, trust the measured return).
+Subtracting $V_\phi$ does not change the expected gradient, but it removes most of the noise.
+
+\sub{2.4 The clipped objective}
+The gradient above is only valid near the policy that collected the data.
+A step that is too large can destroy the policy, and the next batch of data is then useless.
+Trust-region methods bound the step by a KL divergence, but they need a second-order optimiser \cite{trpo}.
+
+PPO gets almost the same effect with first-order steps.
+It measures how much the new policy changed the probability of each action taken:
+\begin{eq}
+\rho_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)}
+\end{eq}
+and maximises a clipped objective:
+\begin{eq}
+L^{CLIP}(\theta) = \mathbb{E}_t\Big[\min\big(\rho_t\, \hat A_t,\ \mathrm{clip}(\rho_t, 1-\varepsilon, 1+\varepsilon)\, \hat A_t\big)\Big]
+\end{eq}
+Once an action is already $1\pm\varepsilon$ times more (or less) likely than before, the objective stops rewarding further change ($\varepsilon=0.2$).
+This plays the role of a bounded step size.
+It is what allows several passes (epochs) of minibatch gradient steps on the same batch of data.
+
+\sub{2.5 The full loss}
+The actor and the critic are trained together on one loss:
+\begin{eq}
+L(\theta,\phi) = -L^{CLIP}(\theta) + c_1\, \mathbb{E}_t\big[(V_\phi(s_t) - \hat R_t)^2\big] - c_2\, \mathbb{E}_t\big[\mathcal{H}(\pi_\theta(\cdot|s_t))\big]
+\end{eq}
+$\hat R_t = \hat A_t + V_\phi(s_t)$ is the target for the critic, and $\mathcal{H}$ is the entropy of the policy.
+These three terms are the \emph{policy loss}, the \emph{value loss} and the \emph{entropy loss} in Fig.~\ref{fig:losses}.
+One PPO iteration is: run the policy to collect a batch, compute $\hat A_t$, then do a few epochs of minibatch gradient steps on $L$.
 
 \head{3. Environment}
-\todo{Outline (about 3/4 page):
-\begin{itemize}
-\item Hidden world: validated KR16 direct model (Part I); integrates $q \leftarrow q + \dot q\,\Delta t$, $\Delta t = 0.05$ s, 100 steps per episode, joint limits clipped.
-\item Action: $\dot q = a \cdot 0.5 \cdot v_{max}$, $a \in [-1,1]^6$.
-\item Observation table: with q / without q; tool pose, target pose, error, previous action, multi-scale error (direction, $\log_{10}$ of the norm, $\tanh(e/s)$ for $s=1,0.1,0.01$ m).
-\item Reward: log-progress (scale-free, equation), action penalty, $+1$ and stop at success.
-\item Start and target: random joint vectors inside the limits, target pose = forward model of it (always reachable).
-\item Why the two scales problem (1 m vs 1 mm) and the three tricks used: log reward, multi-scale observation, (optional) tolerance curriculum.
-\end{itemize}}
+I wrote the environment with the Gymnasium interface \cite{gym}.
+
+\sub{3.1 The hidden world}
+The world is the KR16 direct model validated in Part I (modified DH, $a_3 = 0.68$\,m).
+At each step of $\Delta t = 0.05$\,s the joint angles are integrated and clipped to the joint limits:
+\begin{eq}
+q_{t+1} = \mathrm{clip}\big(q_t + \dot q_t\, \Delta t,\ q_{min},\ q_{max}\big)
+\end{eq}
+The new tool pose is $f_{M_e}(q_{t+1})$.
+An episode lasts at most 100 steps (5\,s).
+It ends early with success when the tool is less than 1\,cm from the target.
+
+At each reset, the start $q$ and a target joint vector $q^*$ are drawn uniformly inside the joint limits, shrunk by 10\,\%.
+The target pose is $f_{M_e}(q^*)$, so every target is reachable.
+Start and target are independent, so the target is often in another arm configuration (elbow or wrist flipped).
+
+\sub{3.2 Action}
+The action is $a \in [-1,1]^6$, scaled to half the maximum joint speeds of the KR16:
+\begin{eq}
+\dot q = 0.5 \cdot a \cdot v_{max}
+\end{eq}
+The Jacobian controller gets the same limit: its $\dot q$ is scaled down, keeping its direction, if one joint would go faster.
+
+\sub{3.3 Observation}
+The observation has 62 values, all measurements (Table~\ref{tab:obs}).
+The agent \emph{without} $q$ gets zeros in place of the joint angles.
+
+\begin{table}[H]
+\centering\small
+\caption{Observation vector. $p$ and $R$: tool position and orientation; $p^*$, $R^*$: target. $\theta u$: rotation vector from $R$ to $R^*$.}
+\label{tab:obs}
+\begin{tabular}{lcl}
+\toprule
+content & size & scaling \\
+\midrule
+joint angles $q$ (zeros for the agent without $q$) & 6 & to $[-1,1]$ over the joint range \\
+tool position $p$ and first two columns of $R$ & 3 + 6 & $p/2$ \\
+target position $p^*$ and first two columns of $R^*$ & 3 + 6 & $p^*/2$ \\
+position error $p^* - p$ & 3 & $/0.5$, clipped to $\pm 3$ \\
+orientation error $\theta u$ & 3 & $/\pi$ \\
+previous action & 6 & --- \\
+multi-scale position error & 13 & direction, $\log_{10}\|e\|$, $\tanh(e/s)$ for $s = 1,\ 0.1,\ 0.01$\,m \\
+multi-scale orientation error & 13 & same, with $s$ in rad \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The multi-scale block solves a problem of scale.
+The agent must move the tool by one metre and then stop it within one centimetre.
+A plain error vector is almost zero for a network in the last centimetres.
+The terms $\tanh(e/s)$ zoom in at three scales, so the last centimetres stay visible.
+
+\sub{3.4 Reward}
+The reward is the decrease of the logarithm of the distance $d_t = \|p^* - p_t\|$:
+\begin{eq}
+r_t = \ln \max(d_{t-1},\, 1\,\mathrm{mm}) - \ln \max(d_t,\, 1\,\mathrm{mm}) - 0.01\, \|a_t\|^2 + 1_{success}
+\end{eq}
+Summed over an episode, the first two terms give $\ln(d_0 / d_T)$.
+So halving the distance is worth the same at 1\,m as at 1\,cm.
+A plain reward like $-d_t$ gives almost nothing for the last centimetres, and the agent never learned to stop precisely with it.
+The small action penalty smooths the motion.
+The bonus of 1 marks success, and the episode ends there.
 
 \head{4. Training}
-\todo{Outline (about 3/4 page):
-\begin{itemize}
-\item Stable-Baselines3 PPO, networks $2 \times 256$ tanh; table of hyperparameters (rollout 4096, batch 512, 10 epochs, $\gamma=0.98$, $\lambda=0.95$, clip 0.2, lr $3\cdot10^{-4}$ decayed, target KL 0.02).
-\item Fixed evaluation set (200 episodes, same seed) every 100k steps.
-\item Story of the instability: first runs collapsed (KL up to 0.6, clip fraction 0.6); fix = target KL + lr decay + bigger rollouts. Short, one figure panel.
-\item Figure: learning curves (success at 1 cm, median error) --- \texttt{figures/learning\_*.pdf}.
-\item Figure: loss curves (value, policy, entropy, KL, clip fraction, std) --- \texttt{figures/losses\_*.pdf}.
-\item Seeds and run time on a laptop CPU.
-\end{itemize}}
+\sub{4.1 Setup}
+I used the PPO implementation of Stable-Baselines3 \cite{sb3}.
+Actor and critic are separate networks with two hidden layers of 256 units (tanh).
+Table~\ref{tab:hyper} gives the settings.
+Four copies of the environment run in parallel.
+Every $10^5$ steps the policy is tested on the same 200 start--target pairs, without exploration noise.
+One run of $12\cdot10^6$ steps takes about 3\,h on a laptop CPU.
+
+\begin{table}[H]
+\centering\small
+\caption{PPO settings.}
+\label{tab:hyper}
+\begin{tabular}{ll@{\qquad}ll}
+\toprule
+steps per batch & $4 \times 1024 = 4096$ & discount $\gamma$ & 0.98 \\
+minibatch size & 512 & GAE $\lambda$ & 0.95 \\
+epochs per batch & 10 & clip $\varepsilon$ & 0.2 \\
+learning rate & $3\cdot10^{-4}$, linear decay to 0 & early stop & approx.\ KL $> 0.03$ \\
+initial $\sigma$ & $e^{-1} \approx 0.37$ & rewards & normalised by a running std \\
+\bottomrule
+\end{tabular}
+\end{table}
+\todo{Update $\gamma$, episode length and the joint-limit penalty if batch Y changes the final setup.}
+
+\sub{4.2 A failure and its fix}
+My first runs learned for 3 million steps and then got worse.
+The loss curves show why (Fig.~\ref{fig:losses}, blue).
+The exploration noise $\sigma$ shrank from 0.37 to 0.014.
+With such a narrow Gaussian, even a small move of the mean changes the action probabilities a lot.
+The approximate KL divergence between successive policies grew to 0.5, and 60\,\% of the samples hit the clip.
+At that point the clipping no longer bounds the step: the trust region is lost and the policy drifts.
+
+Three changes fixed it (Fig.~\ref{fig:losses}, red):
+\begin{itemize}\setlength{\itemsep}{0pt}
+\item stop the epochs of a batch as soon as the KL exceeds $1.5 \times 0.02$;
+\item let the learning rate decay linearly to zero;
+\item collect 4 times more data per batch, which gives a less noisy gradient.
+\end{itemize}
+The KL then stays near its target, the clip fraction stays near 0.25 and $\sigma$ decreases slowly.
+The first runs also used state-dependent exploration (gSDE); plain Gaussian noise worked better here.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/losses_stability.pdf}
+\caption{Training losses and diagnostics. Blue: first runs, unstable. Red: with KL early stop, learning-rate decay and larger batches. Curves averaged over 10 updates.}
+\label{fig:losses}
+\end{figure}
+
+\sub{4.3 Learning curves}
+Fig.~\ref{fig:learning} shows the success rate and the median final error on the 200 test episodes.
+Two seeds of the agent with $q$ give almost the same curve.
+The success rate grows quickly up to about 40\,\% at 6 million steps, then slowly.
+The median error keeps falling until the end.
+The agent without $q$ learns much more slowly.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/learning_batchU.pdf}
+\caption{Learning curves on 200 fixed test episodes: success rate at 1\,cm and median final error. Dashed: Jacobian controller.}
+\label{fig:learning}
+\end{figure}
+\todo{Replace with the final runs (batch Y, X1) if they change the picture. The curriculum run (green) can go: it gave no gain.}
 
 \head{5. Results}
-\todo{Outline (about 1 page):
+\todo{Outline:
 \begin{itemize}
-\item Table: PPO (with q, without q) vs Jacobian control: success at 1 cm, median final error, mean steps to reach; 500 test episodes.
-\item With vs without q: one tool pose comes from up to 8 configurations; does the agent still manage?
-\item Pose (6D) stage: same network, orientation weight raised; success at 1 cm + 5 deg.
-\item Figure: a few 3D tool trajectories, PPO vs Jacobian.
-\item Honest limits: precision tail, failures near the joint limits and the wrist singularity.
+\item Table: PPO (with $q$, without $q$, without $q$ + memory) vs Jacobian on 2000 test episodes: success at 1 cm, median and 90th percentile final error, mean steps. Numbers so far: PPO with $q$ 43\,\%, without $q$ 19\,\%, Jacobian 69\,\%.
+\item Why the Jacobian fails 30\,\%: about 140 of 160 failures end at a joint limit. A local Cartesian law cannot change configuration. Longer episodes do not help (63\,\% at 5\,s, 68\,\% at 50\,s). With targets near the start configuration it reaches 99.7\,\%.
+\item Failure sets differ: 8.7\,\% of targets are solved by PPO only. PPO is better when $q_1$ must turn by more than 3 rad (Jacobian about 31\,\%).
+\item PPO failures: far misses (median 30 cm), often also at a joint limit.
+\item Without $q$: one tool pose can come from up to 8 configurations, so the pose alone is ambiguous. A short motion history (last 4 steps) lets the agent probe its configuration: result of X1.
+\item Pose (6D) stage: same network, orientation weight raised: did not learn (0.8\,\%). State as a limitation.
+\item Figure: a few 3D tool paths, PPO vs Jacobian.
 \end{itemize}}
 
 \head{6. Robustness to a changed link length}
-\todo{Outline (about 1/2 page):
+\todo{Outline:
 \begin{itemize}
-\item $a_3$: 0.68 $\to$ 0.75 m.
-\item Jacobian control with the old model and the tool pose from the old model: almost never succeeds (0.8\,\%).
-\item Nuance to state: with the tool pose \emph{measured} on the real robot, the old Jacobian still reaches about 57\,\% (feedback corrects a wrong model).
-\item PPO retrained / fine-tuned on the new robot: success and training cost.
+\item World changed: $a_3$ 0.68 $\to$ 0.75 m.
+\item PPO \emph{not retrained}: 43.6\,\% (vs 43.3\,\% nominal). Fine-tuned for 8M steps: 44.3\,\%. It never used a model, and it is closed loop on the measured pose.
+\item Jacobian with the old model (old $a_3$, pose from the model): 1.1\,\%.
+\item Fair nuance: the Jacobian law fed the measured pose still reaches about 57\,\%. The robustness comes from closed-loop feedback on measurements. An online Jacobian estimate (Broyden-type) would also adapt; it was out of scope.
 \end{itemize}}
 
 \head{7. Conclusion}
-\todo{Outline: what worked, what it costs (millions of steps vs zero for the model-based law), when a learned controller makes sense; replay of the numpy policy in the lab's RViz simulator (ROS2 node).}
+\todo{Outline: what worked, the cost (millions of simulated steps vs zero for the model-based law), no stability guarantee, when a learned controller makes sense; replay of the numpy policy in the lab's RViz simulator (ROS2 node).}
 
 \begin{thebibliography}{9}
 \bibitem{ppo} J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford and O.~Klimov, ``Proximal policy optimization algorithms,'' arXiv:1707.06347, 2017.
-\todo{add: Schulman et al.\ 2016 (GAE, arXiv:1506.02438); Raffin et al.\ 2021 (Stable-Baselines3, JMLR 22(268)); Towers et al.\ 2024 (Gymnasium, arXiv:2407.17032); Raffin et al.\ 2022 (gSDE, CoRL 2021/PMLR 164) if gSDE is mentioned.}
+\bibitem{kohl} N.~Kohl and P.~Stone, ``Policy gradient reinforcement learning for fast quadrupedal locomotion,'' in \emph{Proc.\ IEEE ICRA}, 2004.
+\bibitem{williams} R.~J.~Williams, ``Simple statistical gradient-following algorithms for connectionist reinforcement learning,'' \emph{Machine Learning}, vol.~8, pp.~229--256, 1992.
+\bibitem{gae} J.~Schulman, P.~Moritz, S.~Levine, M.~Jordan and P.~Abbeel, ``High-dimensional continuous control using generalized advantage estimation,'' in \emph{Proc.\ ICLR}, 2016.
+\bibitem{trpo} J.~Schulman, S.~Levine, P.~Moritz, M.~Jordan and P.~Abbeel, ``Trust region policy optimization,'' in \emph{Proc.\ ICML}, 2015.
+\bibitem{gym} M.~Towers \emph{et al.}, ``Gymnasium: A standard interface for reinforcement learning environments,'' arXiv:2407.17032, 2024.
+\bibitem{sb3} A.~Raffin, A.~Hill, A.~Gleave, A.~Kanervisto, M.~Ernestus and N.~Dormann, ``Stable-Baselines3: Reliable reinforcement learning implementations,'' \emph{JMLR}, vol.~22, no.~268, pp.~1--8, 2021.
 \end{thebibliography}
 
 \end{document}
