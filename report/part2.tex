@@ -53,7 +53,7 @@ In this sense it is \emph{kinematics-agnostic}.
 The Jacobian controller of Exercise 6 is the reference.
 Both controllers get the same targets, the same speed limits, the same time and the same 1\,cm tolerance.
 
-On 2000 random targets, PPO reaches 50\,\% within 1\,cm with the joint angles and 36\,\% without them, against 71.5\,\% for the Jacobian controller.
+On 2000 random targets, PPO reaches about 50\,\% within 1\,cm, with or without the joint angles, against 71.5\,\% for the Jacobian controller.
 When a link length changes, the policies keep their success rate without retraining.
 
 \head{2. Working principle of PPO}
@@ -136,7 +136,7 @@ At each step of $\Delta t = 0.05$\,s the joint angles are integrated and clipped
 q_{t+1} = \mathrm{clip}\big(q_t + \dot q_t\, \Delta t,\ q_{min},\ q_{max}\big)
 \end{eq}
 The new tool pose is $f_{M_e}(q_{t+1})$.
-An episode lasts at most 200 steps (10\,s) for the agent with $q$, and 100 steps (5\,s) for the agent without $q$.
+An episode lasts at most 200 steps (10\,s). The agent without $q$ was trained with 100-step episodes (5\,s), and tested with 10\,s like the others.
 It ends early with success when the tool is less than 1\,cm from the target.
 
 At each reset, the start $q$ and a target joint vector $q^*$ are drawn uniformly inside the joint limits, shrunk by 10\,\%.
@@ -229,7 +229,7 @@ The horizontal axis is the training time normalised by the length of each run (1
 Since the learning rate decays linearly over each run, both runs are at the same point of their schedule at the same abscissa.
 For the agent with $q$, the success rate grows to about 40\,\% at 0.45, then slowly to about 50\,\%.
 Its median error keeps falling until the end, down to about 1\,cm.
-The agent without $q$ follows a similar but lower curve and ends near 40\,\% on this test set.
+The agent without $q$ follows a similar but lower curve and ends near 40\,\% on this test set, with 5\,s episodes.
 
 \begin{figure}[H]
 \centering
@@ -268,7 +268,7 @@ controller & episode & success at 1\,cm & median error & 90th percentile & steps
 \midrule
 Jacobian (Ex.~6) & 10\,s & \textbf{71.5\,\%} & 0.9\,cm & 68\,cm & 42 \\
 PPO with $q$ & 10\,s & 49.9\,\% & 1.4\,cm & 108\,cm & 80 \\
-PPO without $q$, 4-step memory & 5\,s & 36.4\,\% & 11.5\,cm & 130\,cm & 61 \\
+PPO without $q$, 4-step memory & 10\,s & 49.0\,\% & 2.9\,cm & 124\,cm & 80 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -276,7 +276,7 @@ PPO without $q$, 4-step memory & 5\,s & 36.4\,\% & 11.5\,cm & 130\,cm & 61 \\
 The Jacobian controller is the best on this task.
 PPO with $q$ reaches half of the targets, with a median error close to the tolerance.
 Its errors are all-or-nothing: an episode either ends within about 1\,cm, or far from the target.
-With 5\,s episodes, the Jacobian controller reaches 68.8\,\%, so the shorter episodes do not explain the gap of the agent without $q$.
+The agent without $q$ reaches almost the same success rate as the agent with $q$, with a larger median error.
 
 \sub{5.2 Where each controller fails}
 About 30\,\% of the targets are missed by the Jacobian controller.
@@ -298,8 +298,8 @@ Here, the tool pose is exact; a camera would add noise and delay.
 
 Without $q$, one tool pose can come from up to eight arm configurations, so the pose alone does not tell the agent how its joints will move the tool.
 A short memory of the last 4 steps (Section 3.3) lets the agent see how the tool responded to its recent actions.
-With the same training budget of $12\cdot10^6$ steps, the memory raised the success rate from 15.8\,\% to 36.4\,\%.
-The remaining gap to the agent with $q$ is the price of not measuring the configuration.
+With the same training budget of $12\cdot10^6$ steps and 5\,s test episodes, the memory raised the success rate from 15.8\,\% to 36.4\,\%.
+With 10\,s test episodes, it reaches 49.0\,\%, as much as the agent with $q$: the memory replaces the joint angles almost completely, at the cost of slower and less precise reaching.
 
 \sub{5.4 Full pose task}
 For the 6D task, the target orientation must also be reached within 5$^\circ$.
@@ -327,7 +327,7 @@ The Jacobian controller kept the old model.
 controller & nominal world & $a_3 = 0.75$\,m \\
 \midrule
 PPO with $q$, not retrained & 49.9\,\% & 50.4\,\% \\
-PPO without $q$, not retrained & 36.4\,\% & 37.1\,\% \\
+PPO without $q$, not retrained & 49.0\,\% & 49.8\,\% \\
 Jacobian, old model for the pose and the Jacobian & 71.5\,\% & 1.8\,\% \\
 Jacobian, measured pose, old model for the Jacobian only & 71.5\,\% & 72.0\,\% \\
 \bottomrule
@@ -348,7 +348,7 @@ This project is a benchmark rather than a new reaching method.
 On a task where the model-based answer is known, it measures what a model-free learner reaches, what it costs and where it fails differently.
 
 A PPO agent that never sees the kinematic model learned to reach half of the random targets of the KR16 within 1\,cm, against 71.5\,\% for the Jacobian controller.
-Without the joint angles, a 4-step memory was enough to reach 36\,\%.
+Without the joint angles, a 4-step memory was enough to reach the same 49\,\%.
 The full 6D pose task was not solved, even with restricted target orientations.
 
 Learning has two clear benefits.

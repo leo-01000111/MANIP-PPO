@@ -65,6 +65,7 @@ def main():
     ap.add_argument("--tag", default=None)
     ap.add_argument("--max-steps", type=int, default=100, help="episode length for the baseline (PPO models use their config)")
     ap.add_argument("--target-rot-range", type=float, default=None, help="baseline: restricted target orientation (deg)")
+    ap.add_argument("--ppo-max-steps", type=int, default=None, help="override the episode length of the PPO models (default: their config)")
     args = ap.parse_args()
 
     results, trajs = {}, {}
@@ -76,6 +77,8 @@ def main():
         # the model runs with the env settings it was trained with (obs_q, multiscale_obs, pos_tol, ...)
         ekw = dict(cfg.get("env_kwargs", {}), obs_q=cfg["obs_q"], task=args.task, a3=args.a3)
         ekw.pop("w_rot", None)
+        if args.ppo_max_steps:
+            ekw["max_steps"] = args.ppo_max_steps
         model = PPO.load(path, device="cpu")
         make_env = lambda ekw=ekw: KR16ReachEnv(**ekw)
         policy = lambda obs, env: model.predict(obs, deterministic=True)[0]
