@@ -10,3 +10,5 @@ cherubini.md
 NOTES.md
 CLAUDE.md
 report/part2.pdf
+*.synctex.gz
+report/.vscode/
