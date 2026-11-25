@@ -13,6 +13,7 @@
 \usepackage{xcolor}
 \usepackage[font=small]{caption}
 \usepackage{subcaption}
+\usepackage{animate}
 \usepackage{lmodern}
 \usepackage{helvet}
 \usepackage[hidelinks]{hyperref}
@@ -370,8 +371,20 @@ Whether the gap to the Jacobian controller and the full pose task close with suc
 Learning pays off where the model is hard to write (contacts, deformable objects, dynamics) or where global decisions matter.
 Reaching on a known arm is the control case that makes this measurable.
 
-Finally, a trained policy was exported to plain numpy and replayed in the lab's ROS2/RViz simulator, through a ROS2 node that reads the joint states and the target and sends joint commands.
-\todo{Re-export the final policy for the RViz replay; the target of the demo was chosen among the targets the policy reaches.}
+Finally, the policy with $q$ was exported to plain numpy and run in the lab's ROS2/RViz simulator, through a ROS2 node that reads the joint states and the tool pose and sends joint commands (Fig.~\ref{fig:demo}).
+The target was chosen among targets that the policy reaches without oscillation.
+In the lab simulator the joints follow the commands with a delay that was absent in training, and since no penalty on changes of the action was used, the policy can oscillate near the target.
+
+\begin{figure}[H]
+\centering
+\begin{animateinline}[poster=first, controls, loop]{0.5}
+\includegraphics[width=0.8\linewidth]{figures/demo/f0.png}
+\newframe[10]
+\multiframe{40}{i=1+1}{\includegraphics[width=0.8\linewidth]{figures/demo/f\i.jpg}}
+\end{animateinline}
+\caption{The policy with $q$ in the lab's RViz simulator. Still frame: tool position in time for the policy (recorded in the simulator) and for the Jacobian controller (same start, target and speed limit). In Adobe Reader, the frame plays the RViz motion.}
+\label{fig:demo}
+\end{figure}
 
 \begin{thebibliography}{99}
 \bibitem{ppo} J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford and O.~Klimov, ``Proximal policy optimization algorithms,'' arXiv:1707.06347, 2017.
