@@ -225,7 +225,9 @@ initial $\sigma$ & $e^{-1} \approx 0.37$ & rewards & normalised by a running std
 \end{table}
 \sub{4.2 Learning curves and losses}
 Fig.~\ref{fig:learning} shows the success rate and the median final error on the 200 test episodes.
-For the agent with $q$, the success rate grows to about 40\,\% at 8 million steps, then slowly to about 50\,\%.
+The horizontal axis is the training time normalised by the length of each run (1 is $18\cdot10^6$ steps with $q$ and $12\cdot10^6$ without).
+Since the learning rate decays linearly over each run, both runs are at the same point of their schedule at the same abscissa.
+For the agent with $q$, the success rate grows to about 40\,\% at 0.45, then slowly to about 50\,\%.
 Its median error keeps falling until the end, down to about 1\,cm.
 The agent without $q$ follows a similar but lower curve and ends near 40\,\% on this test set.
 

@@ -21,6 +21,7 @@ FIG_DIR = os.path.join(ROOT, "report", "figures")
 COLORS = ["#1f77b4", "#d62728", "#2ca02c", "#ff7f0e", "#9467bd", "#8c564b", "#17becf", "#7f7f7f"]
 SMOOTH = 10  # rolling-mean window for the loss curves (in logged iterations)
 KL_TARGET = 0.02
+XLABEL = {False: "timesteps (millions)", True: "normalised training time"}
 
 plt.rcParams.update({"font.size": 8, "axes.labelsize": 8, "legend.fontsize": 8, "xtick.labelsize": 7.5,
                      "ytick.labelsize": 7.5, "axes.titlesize": 8, "axes.grid": True, "grid.alpha": 0.3,
@@ -56,13 +57,25 @@ def parse_runs(items):
     return runs
 
 
-def learning_figure(runs, tag, baseline):
+def x_axis(run, steps, normalise):
+    """Timesteps in millions, or the fraction of the run's training (0 at its start, 1 at its end)."""
+    if not normalise:
+        return steps / 1e6
+    prog = read_csv(run, "progress.csv")
+    ts = prog["time/total_timesteps"].to_numpy()
+    start = ts[0] - (ts[1] - ts[0])          # warm starts begin above 0
+    with open(os.path.join(ROOT, "runs", run, "config.json")) as f:
+        total = json.load(f)["steps"]
+    return (steps - start) / total
+
+
+def learning_figure(runs, tag, baseline, normalise=False):
     fig, ax = plt.subplots(1, 2, figsize=(7, 2.6))
     for i, (name, label) in enumerate(runs):
         df = read_csv(name, "eval.csv")
         if df is None:
             continue
-        x = df["timesteps"] / 1e6
+        x = x_axis(name, df["timesteps"], normalise)
         ax[0].plot(x, 100 * df["success_rate"], color=COLORS[i % len(COLORS)], label=label)
         ax[1].plot(x, 100 * df["median_pos_err"], color=COLORS[i % len(COLORS)], label=label)
     if baseline is not None:
@@ -73,14 +86,14 @@ def learning_figure(runs, tag, baseline):
     ax[1].set_yscale("log")
     ax[1].axhline(1.0, color="gray", ls=":", lw=1)
     for a in ax:
-        a.set_xlabel("timesteps (millions)")
+        a.set_xlabel(XLABEL[normalise])
     h, l = ax[0].get_legend_handles_labels()
     fig.legend(h, l, loc="lower center", ncol=min(len(l), 3), frameon=False)
     fig.tight_layout(rect=(0, 0.16, 1, 1))
     save(fig, f"learning_{tag}")
 
 
-def losses_figure(runs, tag):
+def losses_figure(runs, tag, normalise=False):
     fig, axs = plt.subplots(2, 3, figsize=(7, 4.2))
     ax = axs.ravel()
     panels = [("train/value_loss", "value loss", True), ("train/policy_gradient_loss", "policy grad. loss", False),
@@ -92,7 +105,7 @@ def losses_figure(runs, tag):
         if df is None or "time/total_timesteps" not in df:
             continue
         c = COLORS[i % len(COLORS)]
-        x = df["time/total_timesteps"] / 1e6
+        x = x_axis(name, df["time/total_timesteps"], normalise)
         for a, (col, _, _) in zip(ax[:5], panels):
             if col in df:
                 a.plot(x, df[col].rolling(SMOOTH, min_periods=1).mean(), color=c, label=label)
@@ -108,7 +121,7 @@ def losses_figure(runs, tag):
     ax[3].axhline(KL_TARGET, color="k", ls="--", lw=1, label="target KL")
     ax[5].set_ylabel(("action std" if any_std else "explained variance") + f" (avg {SMOOTH})")
     for a in ax:
-        a.set_xlabel("timesteps (millions)")
+        a.set_xlabel(XLABEL[normalise])
         a.yaxis.label.set_size(7.5)
     h, l = ax[3].get_legend_handles_labels()
     fig.legend(h, l, loc="lower center", ncol=min(len(l), 3), frameon=False)
@@ -141,10 +154,11 @@ def main():
     ap.add_argument("--tag", required=True)
     ap.add_argument("--baseline-success", type=float, default=None)
     ap.add_argument("--eval-json", default=None, help="runs/eval_<tag>.json from evaluate.py -> table_<tag>.tex")
+    ap.add_argument("--normalise", action="store_true", help="x axis = fraction of each run's training (0 to 1)")
     args = ap.parse_args()
     runs = parse_runs(args.runs)
-    learning_figure(runs, args.tag, args.baseline_success)
-    losses_figure(runs, args.tag)
+    learning_figure(runs, args.tag, args.baseline_success, args.normalise)
+    losses_figure(runs, args.tag, args.normalise)
     if args.eval_json:
         table_from_json(args.eval_json, args.tag)
 
