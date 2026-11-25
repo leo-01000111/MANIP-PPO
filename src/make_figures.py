@@ -75,8 +75,8 @@ def learning_figure(runs, tag, baseline):
     for a in ax:
         a.set_xlabel("timesteps (millions)")
     h, l = ax[0].get_legend_handles_labels()
-    fig.legend(h, l, loc="lower center", ncol=min(len(l), 5), frameon=False)
-    fig.tight_layout(rect=(0, 0.09, 1, 1))
+    fig.legend(h, l, loc="lower center", ncol=min(len(l), 3), frameon=False)
+    fig.tight_layout(rect=(0, 0.16, 1, 1))
     save(fig, f"learning_{tag}")
 
 
@@ -111,8 +111,8 @@ def losses_figure(runs, tag):
         a.set_xlabel("timesteps (millions)")
         a.yaxis.label.set_size(7.5)
     h, l = ax[3].get_legend_handles_labels()
-    fig.legend(h, l, loc="lower center", ncol=min(len(l), 6), frameon=False)
-    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    fig.legend(h, l, loc="lower center", ncol=min(len(l), 3), frameon=False)
+    fig.tight_layout(rect=(0, 0.10, 1, 1))
     save(fig, f"losses_{tag}")
 
 
